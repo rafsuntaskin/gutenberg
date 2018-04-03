@@ -42,6 +42,10 @@ export default function( node ) {
 	}
 
 	if ( wrapper ) {
-		wrapper.parentNode.insertBefore( nodeToInsert, wrapper );
+		const figure = wrapper.parentNode.insertBefore( document.createElement( 'figure' ), wrapper );
+		figure.appendChild( nodeToInsert );
+	} else {
+		const figure = nodeToInsert.parentNode.insertBefore( document.createElement( 'figure' ), nodeToInsert );
+		figure.appendChild( nodeToInsert );
 	}
 }

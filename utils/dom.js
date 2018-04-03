@@ -412,3 +412,13 @@ export function remove( node ) {
 export function insertAfter( newNode, referenceNode ) {
 	referenceNode.parentNode.insertBefore( newNode, referenceNode.nextSibling );
 }
+
+export function unwrap( node ) {
+	const parent = node.parentNode;
+
+	while ( node.firstChild ) {
+		parent.insertBefore( node.firstChild, node );
+	}
+
+	parent.removeChild( node );
+}

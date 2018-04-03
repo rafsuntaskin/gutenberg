@@ -1,4 +1,9 @@
 /**
+ * WordPress dependencies
+ */
+import { unwrap } from '@wordpress/utils';
+
+/**
  * Internal dependencies
  */
 import { isInline, isEmpty } from './utils';
@@ -16,6 +21,11 @@ export default function( HTML ) {
 	const accu = accuDoc.body;
 
 	decu.innerHTML = HTML;
+
+	// Google Docs wraps everything in an inline element...
+	if ( decu.firstChild.nodeType === ELEMENT_NODE && isInline( decu.firstChild ) && decu.firstChild.querySelector( 'p' ) ) {
+		unwrap( decu.firstChild );
+	}
 
 	while ( decu.firstChild ) {
 		const node = decu.firstChild;

@@ -1,7 +1,7 @@
 /**
  * External dependencies
  */
-import { compact } from 'lodash';
+import { omit } from 'lodash';
 import showdown from 'showdown';
 
 /**
@@ -11,20 +11,15 @@ import { createBlock, getBlockTransforms, findTransform } from '../factory';
 import { getBlockType, getUnknownTypeHandlerName } from '../registration';
 import { getBlockAttributes, parseWithGrammar } from '../parser';
 import normaliseBlocks from './normalise-blocks';
-import stripAttributes from './strip-attributes';
 import specialCommentConverter from './special-comment-converter';
-import commentRemover from './comment-remover';
-import createUnwrapper from './create-unwrapper';
 import isInlineContent from './is-inline-content';
 import formattingTransformer from './formatting-transformer';
 import msListConverter from './ms-list-converter';
 import listReducer from './list-reducer';
 import imageCorrector from './image-corrector';
 import blockquoteNormaliser from './blockquote-normaliser';
-import tableNormaliser from './table-normaliser';
-import inlineContentConverter from './inline-content-converter';
 import embeddedContentReducer from './embedded-content-reducer';
-import { deepFilterHTML, isInvalidInline, isNotWhitelisted, isPlain, isInline } from './utils';
+import { deepFilterHTML, isPlain, phrasingContent, tree, cleanHTML } from './utils';
 import shortcodeConverter from './shortcode-converter';
 import slackMarkdownVariantCorrector from './slack-markdown-variant-corrector';
 
@@ -94,14 +89,8 @@ export default function rawHandler( { HTML, plainText = '', mode = 'AUTO', tagNa
 
 	// Return filtered HTML if condition is true
 	if ( mode === 'INLINE' || isAutoModeInline ) {
-		HTML = deepFilterHTML( HTML, [
-			// Add semantic formatting before attributes are stripped.
-			formattingTransformer,
-			stripAttributes,
-			specialCommentConverter,
-			commentRemover,
-			createUnwrapper( ( node ) => ! isInline( node, tagName ) ),
-		] );
+		HTML = deepFilterHTML( HTML, [ formattingTransformer ] );
+		HTML = cleanHTML( HTML, phrasingContent );
 
 		// Allows us to ask for this information when we get a report.
 		window.console.log( 'Processed inline HTML:\n\n', HTML );
@@ -116,31 +105,18 @@ export default function rawHandler( { HTML, plainText = '', mode = 'AUTO', tagNa
 			return [ ...accu, piece ];
 		}
 
-		// Context dependent filters. Needs to run before we remove nodes.
 		piece = deepFilterHTML( piece, [
 			msListConverter,
-		] );
-
-		piece = deepFilterHTML( piece, compact( [
 			listReducer,
 			imageCorrector,
-			// Add semantic formatting before attributes are stripped.
 			formattingTransformer,
-			stripAttributes,
 			specialCommentConverter,
-			commentRemover,
-			! canUserUseUnfilteredHTML && createUnwrapper( ( element ) => element.nodeName === 'IFRAME' ),
 			embeddedContentReducer,
-			createUnwrapper( isNotWhitelisted ),
 			blockquoteNormaliser,
-			tableNormaliser,
-			inlineContentConverter,
-		] ) );
-
-		piece = deepFilterHTML( piece, [
-			createUnwrapper( isInvalidInline ),
 		] );
 
+		piece = normaliseBlocks( piece );
+		piece = cleanHTML( piece, canUserUseUnfilteredHTML ? tree : omit( tree, 'iframe' ) );
 		piece = normaliseBlocks( piece );
 
 		// Allows us to ask for this information when we get a report.

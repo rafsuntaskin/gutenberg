@@ -1,3 +1,5 @@
+import { unwrap } from '@wordpress/utils';
+
 /**
  * Browser dependencies
  */
@@ -54,6 +56,17 @@ export default function( node ) {
 		} else {
 			parentList.parentNode.insertBefore( list, parentList );
 			parentList.parentNode.removeChild( parentList );
+		}
+	}
+
+	// Invalid: OL/UL > OL/UL.
+	if ( parentElement && ( parentElement.nodeName === 'OL' || parentElement.nodeName === 'UL' ) ) {
+		const prevListItem = node.previousElementSibling;
+
+		if ( prevListItem ) {
+			prevListItem.appendChild( node );
+		} else {
+			unwrap( node );
 		}
 	}
 }

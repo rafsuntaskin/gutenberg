@@ -1,7 +1,12 @@
 /**
  * External dependencies
  */
-import { includes } from 'lodash';
+import { includes, omit } from 'lodash';
+
+/**
+ * WordPress dependencies
+ */
+import { unwrap, insertAfter } from '@wordpress/utils';
 
 /**
  * Browser dependencies
@@ -13,12 +18,12 @@ const { ELEMENT_NODE, TEXT_NODE } = window.Node;
  * If tagName and nodeName are present in the same group, the node should be treated as inline.
  * @type {Array}
  */
-const inlineWhitelistTagGroups = [
+const phrasingContentTagGroups = [
 	[ 'ul', 'li', 'ol' ],
 	[ 'h1', 'h2', 'h3', 'h4', 'h5', 'h6' ],
 ];
 
-const inlineWhitelist = {
+export const phrasingContent = {
 	strong: {},
 	em: {},
 	del: {},
@@ -29,63 +34,135 @@ const inlineWhitelist = {
 	sub: {},
 	sup: {},
 	br: {},
+	'#text': {},
 };
 
-const embeddedWhiteList = {
-	img: { attributes: [ 'src', 'alt' ], classes: [ 'alignleft', 'aligncenter', 'alignright', 'alignnone' ] },
-	iframe: { attributes: [ 'src', 'allowfullscreen', 'height', 'width' ] },
-};
+// Recursion is needed.
+// Possible: strong > em > strong.
+// Impossible: strong > strong.
+[ 'strong', 'em', 'del', 'ins', 'a', 'code', 'abbr', 'sub', 'sup' ].forEach( ( tag ) => {
+	phrasingContent[ tag ].children = omit( phrasingContent, tag );
+} );
 
-const inlineWrapperWhiteList = {
-	figcaption: {},
-	h1: {},
-	h2: {},
-	h3: {},
-	h4: {},
-	h5: {},
-	h6: {},
-	p: {},
-	li: { children: [ 'ul', 'ol', 'li' ] },
-	pre: {},
-	td: {},
-	th: {},
-};
-
-const whitelist = {
-	...inlineWhitelist,
-	...inlineWrapperWhiteList,
-	...embeddedWhiteList,
-	figure: {},
-	blockquote: {},
-	hr: {},
+const listContent = {
+	...phrasingContent,
 	ul: {},
 	ol: { attributes: [ 'type' ] },
-	table: {},
-	thead: {},
-	tfoot: {},
-	tbody: {},
-	tr: {},
 };
 
-export function isWhitelisted( element ) {
-	return whitelist.hasOwnProperty( element.nodeName.toLowerCase() );
-}
+// Recursion is needed.
+// Possible: ul > li > ul.
+// Impossible: ul > ul.
+[ 'ul', 'ol' ].forEach( ( tag ) => {
+	listContent[ tag ].children = {
+		li: {
+			children: listContent,
+		},
+	};
+} );
 
-export function isNotWhitelisted( element ) {
-	return ! isWhitelisted( element );
-}
+const embeddedContent = {
+	img: {
+		attributes: [ 'src', 'alt' ],
+		classes: [ 'alignleft', 'aligncenter', 'alignright', 'alignnone' ],
+	},
+	iframe: {
+		attributes: [ 'src', 'allowfullscreen', 'height', 'width' ],
+	},
+};
 
-export function isAttributeWhitelisted( tag, attribute ) {
-	return (
-		whitelist[ tag ] &&
-		whitelist[ tag ].attributes &&
-		whitelist[ tag ].attributes.indexOf( attribute ) !== -1
-	);
-}
+export const tree = {
+	'wp-block': { attributes: 'data-block' },
+	ol: listContent.ol,
+	ul: listContent.ul,
+	h1: {
+		children: phrasingContent,
+	},
+	h2: {
+		children: phrasingContent,
+	},
+	h3: {
+		children: phrasingContent,
+	},
+	h4: {
+		children: phrasingContent,
+	},
+	h5: {
+		children: phrasingContent,
+	},
+	h6: {
+		children: phrasingContent,
+	},
+	p: {
+		children: phrasingContent,
+	},
+	pre: {
+		children: phrasingContent,
+	},
+	figure: {
+		children: {
+			...embeddedContent,
+			figcaption: {
+				children: phrasingContent,
+			},
+		},
+	},
+	blockquote: {},
+	hr: {},
+	table: {
+		children: {
+			thead: {
+				children: {
+					tr: {
+						children: {
+							th: {
+								children: phrasingContent,
+							},
+							td: {
+								children: phrasingContent,
+							},
+						},
+					},
+				},
+			},
+			tfoot: {
+				children: {
+					tr: {
+						children: {
+							th: {
+								children: phrasingContent,
+							},
+							td: {
+								children: phrasingContent,
+							},
+						},
+					},
+				},
+			},
+			tbody: {
+				children: {
+					tr: {
+						children: {
+							th: {
+								children: phrasingContent,
+							},
+							td: {
+								children: phrasingContent,
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+};
+
+// A blockquote can contain any of the above.
+tree.blockquote.children = omit( tree, 'blockquote' );
 
 /**
  * Checks if nodeName should be treated as inline when being added to tagName.
- * This happens if nodeName and tagName are in the same group defined in inlineWhitelistTagGroups.
+ * This happens if nodeName and tagName are in the same group defined in phrasingContentTagGroups.
  *
  * @param {string} nodeName Node name.
  * @param {string} tagName  Tag name.
@@ -97,22 +174,14 @@ function isInlineForTag( nodeName, tagName ) {
 	if ( ! tagName || ! nodeName ) {
 		return false;
 	}
-	return inlineWhitelistTagGroups.some( tagGroup =>
+	return phrasingContentTagGroups.some( tagGroup =>
 		includes( tagGroup, nodeName ) && includes( tagGroup, tagName )
 	);
 }
 
 export function isInline( node, tagName ) {
 	const nodeName = node.nodeName.toLowerCase();
-	return inlineWhitelist.hasOwnProperty( nodeName ) || isInlineForTag( nodeName, tagName );
-}
-
-export function isClassWhitelisted( tag, name ) {
-	return (
-		whitelist[ tag ] &&
-		whitelist[ tag ].classes &&
-		whitelist[ tag ].classes.indexOf( name ) !== -1
-	);
+	return phrasingContent.hasOwnProperty( nodeName ) || isInlineForTag( nodeName, tagName );
 }
 
 /**
@@ -125,44 +194,7 @@ export function isClassWhitelisted( tag, name ) {
  * @return {boolean} True if embedded content, false if not.
  */
 export function isEmbedded( node ) {
-	return embeddedWhiteList.hasOwnProperty( node.nodeName.toLowerCase() );
-}
-
-export function isInlineWrapper( node ) {
-	return inlineWrapperWhiteList.hasOwnProperty( node.nodeName.toLowerCase() );
-}
-
-export function isAllowedBlock( parentNode, node ) {
-	const parentNodeTag = parentNode.nodeName.toLowerCase();
-	const nodeTag = node.nodeName.toLowerCase();
-
-	return (
-		whitelist[ parentNodeTag ] &&
-		whitelist[ parentNodeTag ].children &&
-		whitelist[ parentNodeTag ].children.indexOf( nodeTag ) !== -1
-	);
-}
-
-export function isInvalidInline( element ) {
-	if ( ! isInline( element ) ) {
-		return false;
-	}
-
-	if ( ! element.hasChildNodes() ) {
-		return false;
-	}
-
-	return Array.from( element.childNodes ).some( ( node ) => {
-		if ( node.nodeType === ELEMENT_NODE ) {
-			if ( ! isInline( node ) ) {
-				return true;
-			}
-
-			return isInvalidInline( node );
-		}
-
-		return false;
-	} );
+	return embeddedContent.hasOwnProperty( node.nodeName.toLowerCase() );
 }
 
 export function isDoubleBR( node ) {
@@ -248,6 +280,78 @@ export function deepFilterHTML( HTML, filters = [] ) {
 	doc.body.innerHTML = HTML;
 
 	deepFilterNodeList( doc.body.childNodes, filters, doc );
+
+	return doc.body.innerHTML;
+}
+
+export function cleanNodeList( nodeList, possibilities, doc ) {
+	Array.from( nodeList ).forEach( ( node ) => {
+		const tag = node.nodeName.toLowerCase();
+
+		if ( possibilities.hasOwnProperty( tag ) ) {
+			if ( node.nodeType === ELEMENT_NODE ) {
+				const { attributes = [], classes = [], children } = possibilities[ tag ];
+
+				if ( ! node.hasChildNodes() && children ) {
+					node.parentNode.removeChild( node );
+					return;
+				}
+
+				if ( isEmpty( node ) && children ) {
+					node.parentNode.removeChild( node );
+					return;
+				}
+
+				Array.from( node.attributes ).forEach( ( { name } ) => {
+					if ( name === 'class' || attributes.indexOf( name ) !== -1 ) {
+						return;
+					}
+
+					node.removeAttribute( name );
+				} );
+
+				const oldClasses = node.getAttribute( 'class' ) || '';
+				const newClasses = oldClasses
+					.split( ' ' )
+					.filter( ( name ) => name && classes.indexOf( name ) !== -1 )
+					.join( ' ' );
+
+				if ( newClasses.length ) {
+					node.setAttribute( 'class', newClasses );
+				} else {
+					node.removeAttribute( 'class' );
+				}
+
+				if ( node.hasChildNodes() ) {
+					if ( children ) {
+						cleanNodeList( node.childNodes, children, doc );
+					} else {
+						while ( node.firstChild ) {
+							node.removeNode( node.firstChild );
+						}
+					}
+				}
+			}
+		} else {
+			cleanNodeList( node.childNodes, possibilities, doc );
+
+			if ( tree.hasOwnProperty( node.nodeName.toLowerCase() ) && node.nextElementSibling ) {
+				insertAfter( doc.createElement( 'br' ), node );
+			}
+
+			if ( node.nodeType !== TEXT_NODE || ! node.nodeValue ) {
+				unwrap( node );
+			}
+		}
+	} );
+}
+
+export function cleanHTML( HTML, possibilities ) {
+	const doc = document.implementation.createHTMLDocument( '' );
+
+	doc.body.innerHTML = HTML;
+
+	cleanNodeList( doc.body.childNodes, possibilities, doc );
 
 	return doc.body.innerHTML;
 }
