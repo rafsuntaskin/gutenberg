@@ -8,6 +8,15 @@
 	justify-content: center;
 	flex-direction: column;
 
+	.editor-block-list__block:not(.is-selected) & {
+		opacity: 0.5;
+	}
+
+	&:not(.components-placeholder),
+	[contenteditable="true"] {
+		color: white;
+	}
+
 	&.has-parallax {
 		background-attachment: fixed;
 	}

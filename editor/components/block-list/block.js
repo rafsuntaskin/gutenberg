@@ -178,6 +178,11 @@ export class BlockListBlock extends Component {
 		// or when we shift tab from the sidebar
 		if ( ! forceInnerFocus && keyboardMode === 'navigation' ) {
 			this.wrapperNode.focus();
+			this.wrapperNode.scrollIntoView( {
+				block: 'center',
+				inline: 'center',
+				behavior: 'smooth',
+			} );
 			return;
 		}
 
